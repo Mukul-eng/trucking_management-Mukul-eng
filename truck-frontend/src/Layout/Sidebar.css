@@ -1,0 +1,198 @@
+/* --- Sidebar Container --- */
+.sidebar-container {
+  height: 100vh;
+  position: fixed;
+  left: 0;
+  top: 0;
+  width: 260px; /* Slightly wider for better spacing */
+  background-color: #FFFFFF;
+  transition: width 0.3s ease, transform 0.3s ease;
+  z-index: 1000;
+  box-shadow: 2px 0 10px rgba(0, 0, 0, 0.05); /* Softer, more modern shadow */
+  padding-top: 70px; /* Height of navbar */
+  border-right: 1px solid #e9ecef; /* Subtle border for definition */
+}
+
+.sidebar-container.collapsed {
+  width: 80px; /* Slightly wider for better icon centering */
+}
+
+/* --- Sidebar --- */
+.sidebar {
+  height: 100%;
+  overflow-y: auto; /* Allows scrolling if menu items exceed viewport height */
+  padding: 15px 0;
+}
+
+/* Hide scrollbar for a cleaner look, but keep functionality */
+.sidebar::-webkit-scrollbar {
+  width: 4px;
+}
+.sidebar::-webkit-scrollbar-track {
+  background: #f1f1f1;
+}
+.sidebar::-webkit-scrollbar-thumb {
+  background: #c1c1c1;
+  border-radius: 2px;
+}
+.sidebar::-webkit-scrollbar-thumb:hover {
+  background: #a8a8a8;
+}
+
+
+/* --- Menu --- */
+.menu {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.menu-item {
+  margin: 2px 12px; /* Adds space between items and sidebar edge */
+}
+
+.menu-link {
+  display: flex;
+  align-items: center;
+  padding: 14px 18px;
+  color: #5a6c7d; /* Softer default text color */
+  cursor: pointer;
+  transition: all 0.2s ease-in-out;
+  border-radius: 8px; /* Rounded corners for a modern look */
+  position: relative;
+  text-decoration: none; /* Remove underline from links */
+}
+
+.menu-link:hover {
+  background-color: #f8f9fa; /* Lighter, more subtle hover */
+  color: #295b52;
+}
+
+/* --- Active State (The main fix) --- */
+.menu-link.active {
+  color: #295b52;
+  font-weight: 600; /* Bolder text for active item */
+  background-color: rgba(94, 172, 131, 0.12); /* Very subtle background */
+  border-left: 4px solid #295b52;
+  border-radius: 0 8px 8px 0; /* Only round right corners */
+}
+
+.menu-icon {
+  font-size: 18px;
+  width: 24px; /* Fixed width for alignment */
+  text-align: center;
+  color: #5a6c7d;
+  transition: color 0.2s ease-in-out;
+}
+
+.menu-link:hover .menu-icon,
+.menu-link.active .menu-icon {
+  color: #295b52; /* Icon changes color on hover/active */
+}
+
+.menu-text {
+  margin-left: 15px;
+  font-weight: 500;
+  font-size: 15px;
+  white-space: nowrap; /* Prevents text from wrapping */
+  overflow: hidden;
+  text-overflow: ellipsis; /* Adds "..." if text is too long */
+}
+
+.arrow-icon {
+  margin-left: auto;
+  transition: transform 0.3s ease;
+  font-size: 12px;
+  color: #5a6c7d;
+}
+
+.arrow-icon.rotate {
+  transform: rotate(180deg);
+}
+
+/* --- Submenu --- */
+.submenu {
+  list-style: none;
+  padding-left: 20px; /* Indent sub-items */
+  margin-top: 5px;
+  padding-right: 20px;
+}
+
+.submenu-item {
+  padding: 10px 15px;
+  color: #5a6c7d;
+  cursor: pointer;
+  border-radius: 6px;
+  transition: all 0.2s ease-in-out;
+  font-size: 14px;
+}
+
+.submenu-item:hover {
+  background-color: #f8f9fa;
+  color: #295b52;
+}
+
+.submenu-item.active-sub {
+  color: #295b52;
+  font-weight: 500;
+  background-color: rgba(94, 172, 131, 0.08);
+  border-left: 3px solid #295b52;
+}
+
+/* --- Collapsed State Adjustments --- */
+.sidebar-container.collapsed .menu-text,
+.sidebar-container.collapsed .arrow-icon {
+  display: none;
+}
+
+.sidebar-container.collapsed .menu-link {
+  justify-content: center;
+  padding: 14px 0;
+  border-radius: 8px; /* Fully rounded when collapsed */
+}
+
+.sidebar-container.collapsed .menu-icon {
+  margin: 0;
+}
+
+.sidebar-container.collapsed .menu-link.active {
+  border-radius: 8px; /* Fully rounded when collapsed */
+  border-left: none; /* Remove side border */
+  background-color: rgba(94, 172, 131, 0.15); /* More visible background */
+}
+
+/* --- Loading Spinner --- */
+.spinner-border {
+  border: 3px solid rgba(94, 172, 131, 0.2);
+  border-top-color: #295b52;
+  border-radius: 50%;
+  width: 2rem;
+  height: 2rem;
+  animation: spin 1s linear infinite;
+  margin: 20px auto; /* Center the spinner */
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* --- Responsive Adjustments --- */
+@media (max-width: 768px) {
+  .sidebar-container {
+    width: 280px; /* A bit wider on mobile for better touch targets */
+    transform: translateX(-100%); /* Hide off-screen by default */
+  }
+  
+  /* When not collapsed, it's visible */
+  .sidebar-container:not(.collapsed) {
+    transform: translateX(0);
+  }
+  
+  /* When collapsed, it's hidden */
+  .sidebar-container.collapsed {
+    transform: translateX(-100%);
+    width: 280px; /* Keep width consistent for animation */
+  }
+}
