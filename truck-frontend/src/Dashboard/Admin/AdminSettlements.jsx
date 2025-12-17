@@ -26,15 +26,10 @@ const AdminSettlements = () => {
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
   const [drivers, setDrivers] = useState([]);
-  const [statementData, setStatementData] = useState({
+  const [settlementData, setSettlementData] = useState({
     driver: { name: '', user_id_code: '' },
     tickets: [],
     totalPay: 0,
-    customer: '',        // e.g., "Aecon Construction"
-    customerId: null,    // ← ADD THIS: needed for PDF download
-    subtotal: 0,
-    gst: 0,
-    total: 0,
   });
   const [loading, setLoading] = useState(false);
   const [downloading, setDownloading] = useState(false);
@@ -66,15 +61,10 @@ const AdminSettlements = () => {
         fetchSettlement();
       }
     } else {
-      setStatementData({
+      setSettlementData({
         driver: { name: '', user_id_code: '' },
         tickets: [],
         totalPay: 0,
-        customer: '',
-        customerId: null,
-        subtotal: 0,
-        gst: 0,
-        total: 0,
       });
     }
   }, [selectedDriverId, startDate, endDate]);
@@ -115,15 +105,8 @@ const AdminSettlements = () => {
     setSuccess('');
     
     try {
-      const driverIdParam = String(selectedDriverId).trim();
-      if (!driverIdParam) {
-        setError('Please select a driver');
-        setLoading(false);
-        return;
-      }
-      
       const params = new URLSearchParams({
-        driverId: driverIdParam,
+        driverId: selectedDriverId,
         startDate: formattedStartDate,
         endDate: formattedEndDate,
       });
@@ -131,8 +114,7 @@ const AdminSettlements = () => {
       const response = await axiosInstance.get(`/admin/settlements/generate?${params.toString()}`);
       
       if (response.data.success) {
-        // ✅ Expecting: customerId, customer, subtotal, gst, total, tickets, driver
-        setStatementData(response.data.data);
+        setSettlementData(response.data.data);
         setSuccess('Settlement generated successfully');
         setTimeout(() => setSuccess(''), 3000);
       }
@@ -146,35 +128,28 @@ const AdminSettlements = () => {
   };
 
   const handleDownloadPdf = async () => {
-    if (!startDate || !endDate || !statementData.customerId) {
-      setError('Customer data not available. Cannot download invoice.');
+    if (!startDate || !endDate || !selectedDriverId) {
+      setError('Please select a driver and valid dates');
       return;
     }
-  
-    if (!statementData.tickets || statementData.tickets.length === 0) {
+
+    if (!settlementData.tickets || settlementData.tickets.length === 0) {
       setError('No tickets available to download');
       return;
     }
-  
+
     setDownloading(true);
     setError('');
-  
+
     try {
       const formattedStartDate = formatDateForAPI(startDate);
       const formattedEndDate = formatDateForAPI(endDate);
-  
-      const params = new URLSearchParams({
-        startDate: formattedStartDate,
-        endDate: formattedEndDate,
-      });
-  
-      // ✅ ADD CACHE-BUSTING PARAMETER TO AVOID 304
-      params.append('t', Date.now()); // Forces unique URL
-  
-      const downloadUrl = `/admin/invoices/download/${statementData.customerId}?${params.toString()}`;
-  
-      console.log('Downloading invoice PDF:', downloadUrl);
-  
+
+      // ✅ CORRECT: Call /settlements/download with driverId
+      const downloadUrl = `/admin/settlements/download/${selectedDriverId}?startDate=${formattedStartDate}&endDate=${formattedEndDate}&t=${Date.now()}`;
+
+      console.log('Downloading settlement PDF:', downloadUrl);
+
       const response = await axiosInstance.get(downloadUrl, {
         responseType: 'blob',
         headers: {
@@ -183,7 +158,7 @@ const AdminSettlements = () => {
           'Expires': '0'
         }
       });
-  
+
       const contentType = response.headers['content-type'] || '';
       
       if (contentType.includes('application/json')) {
@@ -196,89 +171,45 @@ const AdminSettlements = () => {
         }
         throw new Error(jsonData.message || 'Failed to generate PDF');
       }
-  
+
       if (!contentType.includes('application/pdf')) {
         throw new Error(`Unexpected content type: ${contentType}`);
       }
-  
+
       const blob = new Blob([response.data], { type: 'application/pdf' });
       const url = window.URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = url;
-  
-      const customerName = (statementData.customer || 'Customer').replace(/\s+/g, '_');
-      const filename = `Invoice-${customerName}-${formattedStartDate}-${formattedEndDate}.pdf`;
+
+      const driverName = (settlementData.driver?.name || 'Driver').replace(/\s+/g, '_');
+      const filename = `Settlement-${driverName}-${formattedStartDate}-${formattedEndDate}.pdf`;
       link.setAttribute('download', filename);
       document.body.appendChild(link);
       link.click();
-  
+
       setTimeout(() => {
         window.URL.revokeObjectURL(url);
         link.remove();
       }, 100);
-  
-      setSuccess('Invoice PDF downloaded successfully');
+
+      setSuccess('Settlement PDF downloaded successfully');
       setTimeout(() => setSuccess(''), 3000);
     } catch (err) {
       console.error('PDF Download Error:', err);
-      if (err.response?.data) {
-        const reader = new FileReader();
-        reader.onload = () => {
-          try {
-            const jsonData = JSON.parse(reader.result);
-            setError(jsonData.message || 'Failed to download invoice PDF');
-          } catch {
-            setError('Failed to download invoice PDF');
-          }
-        };
-        reader.readAsText(err.response.data);
-      } else {
-        setError(err.message || 'Failed to download invoice PDF');
-      }
+      setError(err.response?.data?.message || err.message || 'Failed to download settlement PDF');
     } finally {
       setDownloading(false);
     }
   };
 
   const handleEmailDriver = async () => {
-    if (!selectedDriverId || !startDate || !endDate || statementData.tickets.length === 0) {
-      setError('No data to email');
-      return;
-    }
-
-    setEmailing(true);
-    setError('');
-    
-    try {
-      const formattedStartDate = formatDateForAPI(startDate);
-      const formattedEndDate = formatDateForAPI(endDate);
-      
-      const params = new URLSearchParams({
-        startDate: formattedStartDate,
-        endDate: formattedEndDate,
-      });
-
-      // Optional: Keep this if backend supports it, or repurpose for invoice email
-      const response = await axiosInstance.post(`/admin/settlements/email/${selectedDriverId}?${params.toString()}`);
-      
-      if (response.data.success) {
-        setSuccess('Email sent successfully');
-        setTimeout(() => setSuccess(''), 3000);
-      }
-    } catch (err) {
-      if (err.response?.status === 404) {
-        setError('Email feature not implemented');
-      } else {
-        setError(err.response?.data?.message || 'Failed to send email');
-      }
-    } finally {
-      setEmailing(false);
-    }
+    setError('Email feature not implemented for settlements yet');
+    // Optional: Implement later if needed
   };
 
   return (
     <Container fluid className="p-4" style={{ backgroundColor: lightBackgroundColor }}>
-      <h1 className="mb-4" style={{ color: primaryColor }}>Invoices (Customer Billing)</h1>
+      <h1 className="mb-4" style={{ color: primaryColor }}>Driver Settlements</h1> {/* ✅ Changed title */}
       
       {error && <Alert variant="danger" className="mb-3" onClose={() => setError('')} dismissible>{error}</Alert>}
       {success && <Alert variant="success" className="mb-3" onClose={() => setSuccess('')} dismissible>{success}</Alert>}
@@ -292,10 +223,10 @@ const AdminSettlements = () => {
             boxShadow: '0 4px 6px rgba(0,0,0,0.05)'
           }}>
             <Card.Body>
-              <Card.Title as="h5" style={{ color: primaryColor }}>Generate Customer Invoice</Card.Title>
+              <Card.Title as="h5" style={{ color: primaryColor }}>Generate Driver Settlement</Card.Title> {/* ✅ Changed */}
               <Form>
                 <Form.Group className="mb-3" controlId="selectDriver">
-                  <Form.Label style={{ color: primaryColor, fontWeight: '500' }}>Select Driver (to load customer)</Form.Label>
+                  <Form.Label style={{ color: primaryColor, fontWeight: '500' }}>Select Driver</Form.Label> {/* ✅ Removed "to load customer" */}
                   <Form.Select
                     value={selectedDriverId}
                     onChange={(e) => setSelectedDriverId(e.target.value)}
@@ -352,21 +283,20 @@ const AdminSettlements = () => {
               {loading ? (
                 <div className="text-center p-4">
                   <Spinner animation="border" role="status" style={{ color: primaryColor }} />
-                  <p className="mt-2">Generating invoice...</p>
+                  <p className="mt-2">Generating settlement...</p>
                 </div>
-              ) : statementData.tickets.length > 0 ? (
+              ) : settlementData.tickets.length > 0 ? (
                 <>
                   <div className="d-flex justify-content-between align-items-start mb-4">
                     <div>
-                      <h2 className="fw-bold" style={{ color: primaryColor }}>CUSTOMER INVOICE</h2>
+                      <h2 className="fw-bold" style={{ color: primaryColor }}>DRIVER SETTLEMENT</h2> {/* ✅ Changed */}
                       <p className="mb-0" style={{ color: primaryColor }}>
                         Period: {startDate} to {endDate}
                       </p>
                     </div>
                     <div className="text-end">
-                      <strong style={{ color: primaryColor }}>Bill To:</strong>
-                      <p className="mb-0">{statementData.customer || 'N/A'}</p>
-                      <p className="text-muted">Via Driver: {statementData.driver?.name || 'N/A'}</p>
+                      <strong style={{ color: primaryColor }}>Driver:</strong>
+                      <p className="mb-0">{settlementData.driver?.name || 'N/A'} ({settlementData.driver?.user_id_code || 'N/A'})</p>
                     </div>
                   </div>
 
@@ -376,22 +306,22 @@ const AdminSettlements = () => {
                         <th>Date</th>
                         <th>Ticket #</th>
                         <th>Job Type</th>
-                        <th>Truck</th>
+                        <th>Customer</th>
                         <th className="text-end">Qty</th>
-                        <th className="text-end">Bill Rate</th>
-                        <th className="text-end">Total Bill</th>
+                        <th className="text-end">Pay Rate</th>
+                        <th className="text-end">Total Pay</th>
                       </tr>
                     </thead>
                     <tbody>
-                      {statementData.tickets.map((ticket) => (
+                      {settlementData.tickets.map((ticket) => (
                         <tr key={ticket.id}>
                           <td>{new Date(ticket.date).toLocaleDateString()}</td>
                           <td>{ticket.ticket_number}</td>
                           <td>{ticket.job_type || '-'}</td>
-                          <td>{ticket.truck_number || '-'}</td>
+                          <td>{ticket.customer_name || '-'}</td>
                           <td className="text-end">{parseFloat(ticket.quantity).toFixed(1)}</td>
-                          <td className="text-end">${parseFloat(ticket.bill_rate).toFixed(2)}</td>
-                          <td className="text-end">${parseFloat(ticket.total_bill).toFixed(2)}</td>
+                          <td className="text-end">${parseFloat(ticket.pay_rate).toFixed(2)}</td>
+                          <td className="text-end">${parseFloat(ticket.total_pay).toFixed(2)}</td>
                         </tr>
                       ))}
                     </tbody>
@@ -401,17 +331,9 @@ const AdminSettlements = () => {
                     <Col md="5">
                       <Table borderless size="sm">
                         <tbody>
-                          <tr>
-                            <td>Subtotal:</td>
-                            <td className="text-end">${(statementData.subtotal || 0).toFixed(2)}</td>
-                          </tr>
-                          <tr>
-                            <td>GST (5%):</td>
-                            <td className="text-end">${(statementData.gst || 0).toFixed(2)}</td>
-                          </tr>
                           <tr className="fw-bold fs-5" style={{ color: primaryColor }}>
-                            <td>Total:</td>
-                            <td className="text-end">${(statementData.total || 0).toFixed(2)}</td>
+                            <td>Total Pay:</td>
+                            <td className="text-end">${(settlementData.totalPay || 0).toFixed(2)}</td>
                           </tr>
                         </tbody>
                       </Table>
@@ -419,23 +341,6 @@ const AdminSettlements = () => {
                   </Row>
 
                   <div className="text-end mt-4">
-                    <Button 
-                      style={{ backgroundColor: primaryColor, border: "none" }} 
-                      className="me-2"
-                      onClick={handleEmailDriver}
-                      disabled={emailing}
-                    >
-                      {emailing ? (
-                        <>
-                          <Spinner as="span" animation="border" size="sm" className="me-2" />
-                          Sending...
-                        </>
-                      ) : (
-                        <>
-                          <FaEnvelope className="me-2" /> Email Invoice
-                        </>
-                      )}
-                    </Button>
                     <Button 
                       style={{ backgroundColor: primaryColor, border: "none" }}
                       onClick={handleDownloadPdf}
@@ -448,7 +353,7 @@ const AdminSettlements = () => {
                         </>
                       ) : (
                         <>
-                          <FaFileDownload className="me-2" /> Download Invoice PDF
+                          <FaFileDownload className="me-2" /> Download Settlement PDF {/* ✅ Changed */}
                         </>
                       )}
                     </Button>
@@ -461,8 +366,8 @@ const AdminSettlements = () => {
                   style={{ backgroundColor: lightBackgroundColor, borderColor: lightBorderColor }}
                 >
                   {selectedDriverId && startDate && endDate
-                    ? `No billing data found for this period.`
-                    : 'Select a driver and date range to generate invoice.'}
+                    ? `No settlement data found for this period.`
+                    : 'Select a driver and date range to generate settlement.'}
                 </Alert>
               )}
             </Card.Body>

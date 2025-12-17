@@ -1163,90 +1163,349 @@ const generateSettlement = async (req, res) => {
 /**
  * Download settlement as PDF
  */
+// const downloadSettlement = async (req, res) => {
+//   try {
+//     const { driverId } = req.params;
+//     const { startDate, endDate } = req.query;
+
+//     if (!driverId || !startDate || !endDate) {
+//       return res.status(400).json({
+//         success: false,
+//         message: 'Driver ID, start date, and end date are required'
+//       });
+//     }
+
+//     // Get driver info
+//     const [drivers] = await pool.execute(
+//       'SELECT name, user_id_code FROM drivers WHERE id = ?',
+//       [driverId]
+//     );
+
+//     if (drivers.length === 0) {
+//       return res.status(404).json({
+//         success: false,
+//         message: 'Driver not found'
+//       });
+//     }
+
+//     const driver = drivers[0];
+//     const filename = `Settlement-${driver.user_id_code}-${startDate}-${endDate}.pdf`;
+
+//     // ✅ DISABLE CACHING
+//     res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, private');
+//     res.setHeader('Pragma', 'no-cache');
+//     res.setHeader('Expires', '0');
+
+//     // ✅ SET CORRECT PDF HEADERS
+//     res.setHeader('Content-Type', 'application/pdf');
+//     res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+
+//     // ✅ SEND DUMMY PDF
+//     const dummyPdf = Buffer.from(
+//       `%PDF-1.4
+// 1 0 obj
+// << /Type /Catalog /Pages 2 0 R >>
+// endobj
+// 2 0 obj
+// << /Type /Pages /Kids [3 0 R] /Count 1 >>
+// endobj
+// 3 0 obj
+// << /Type /Page /Parent 2 0 R /Resources <<>> /Contents 4 0 R >>
+// endobj
+// 4 0 obj
+// << /Length 60 >>
+// stream
+// BT /F1 18 Tf 72 720 Td (DRIVER SETTLEMENT) Tj
+// /Courier 12 Tf 72 690 Td (Driver: ${driver.name} (${driver.user_id_code})) Tj
+// 72 670 Td (Period: ${startDate} to ${endDate}) Tj
+// ET
+// endstream
+// endobj
+// xref
+// 0 5
+// 0000000000 65535 f 
+// 0000000015 00000 n 
+// 0000000076 00000 n 
+// 0000000130 00000 n 
+// 0000000212 00000 n 
+// trailer
+// << /Size 5 /Root 1 0 R >>
+// startxref
+// 305
+// %%EOF`
+//     );
+
+//     return res.status(200).send(dummyPdf);
+//   } catch (error) {
+//     console.error('Error downloading settlement:', error);
+//     res.setHeader('Content-Type', 'application/json');
+//     return res.status(500).json({
+//       success: false,
+//       message: 'Failed to generate settlement PDF',
+//       error: error.message
+//     });
+//   }
+// };
+
+
+/**
+ * Download settlement as PDF (REAL VERSION - Driver ke liye)
+ */
+/**
+ * Download settlement as PDF (FIXED VERSION - Same as downloadInvoice)
+ */
 const downloadSettlement = async (req, res) => {
+  // Set error response headers early to ensure JSON errors are properly identified
+  const sendError = (statusCode, message) => {
+    res.status(statusCode);
+    res.setHeader('Content-Type', 'application/json');
+    return res.json({ success: false, message });
+  };
+
   try {
     const { driverId } = req.params;
     const { startDate, endDate } = req.query;
 
+    console.log(`[Settlement PDF] Request received: driverId=${driverId}, startDate=${startDate}, endDate=${endDate}`);
+
+    // Validate required parameters
     if (!driverId || !startDate || !endDate) {
-      return res.status(400).json({
-        success: false,
-        message: 'Driver ID, start date, and end date are required'
-      });
+      console.error('[Settlement PDF] Missing required parameters');
+      return sendError(400, 'Driver ID, start date, and end date are required');
     }
 
-    // Get driver info
+    // Validate date format (YYYY-MM-DD)
+    const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
+    if (!dateRegex.test(startDate) || !dateRegex.test(endDate)) {
+      console.error('[Settlement PDF] Invalid date format');
+      return sendError(400, 'Dates must be in YYYY-MM-DD format');
+    }
+
+    // Fetch driver info
     const [drivers] = await pool.execute(
-      'SELECT name, user_id_code FROM drivers WHERE id = ?',
+      'SELECT id, name, user_id_code FROM drivers WHERE id = ?',
       [driverId]
     );
 
     if (drivers.length === 0) {
-      return res.status(404).json({
-        success: false,
-        message: 'Driver not found'
-      });
+      console.error(`[Settlement PDF] Driver not found: ${driverId}`);
+      return sendError(404, 'Driver not found');
     }
-
     const driver = drivers[0];
-    const filename = `Settlement-${driver.user_id_code}-${startDate}-${endDate}.pdf`;
+    console.log(`[Settlement PDF] Driver found: ${driver.name} (${driver.user_id_code})`);
 
-    // ✅ DISABLE CACHING
-    res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, private');
-    res.setHeader('Pragma', 'no-cache');
-    res.setHeader('Expires', '0');
-
-    // ✅ SET CORRECT PDF HEADERS
-    res.setHeader('Content-Type', 'application/pdf');
-    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
-
-    // ✅ SEND DUMMY PDF
-    const dummyPdf = Buffer.from(
-      `%PDF-1.4
-1 0 obj
-<< /Type /Catalog /Pages 2 0 R >>
-endobj
-2 0 obj
-<< /Type /Pages /Kids [3 0 R] /Count 1 >>
-endobj
-3 0 obj
-<< /Type /Page /Parent 2 0 R /Resources <<>> /Contents 4 0 R >>
-endobj
-4 0 obj
-<< /Length 60 >>
-stream
-BT /F1 18 Tf 72 720 Td (DRIVER SETTLEMENT) Tj
-/Courier 12 Tf 72 690 Td (Driver: ${driver.name} (${driver.user_id_code})) Tj
-72 670 Td (Period: ${startDate} to ${endDate}) Tj
-ET
-endstream
-endobj
-xref
-0 5
-0000000000 65535 f 
-0000000015 00000 n 
-0000000076 00000 n 
-0000000130 00000 n 
-0000000212 00000 n 
-trailer
-<< /Size 5 /Root 1 0 R >>
-startxref
-305
-%%EOF`
+    // Fetch approved tickets for driver in date range
+    const [tickets] = await pool.execute(
+      `SELECT t.*, c.name as customer_name
+       FROM tickets t
+       LEFT JOIN customers c ON t.customer = c.name
+       WHERE t.driver_id = ?
+         AND t.status = 'Approved'
+         AND t.date >= ? AND t.date <= ?
+       ORDER BY t.date ASC`,
+      [driverId, startDate, endDate]
     );
 
-    return res.status(200).send(dummyPdf);
-  } catch (error) {
-    console.error('Error downloading settlement:', error);
-    res.setHeader('Content-Type', 'application/json');
-    return res.status(500).json({
-      success: false,
-      message: 'Failed to generate settlement PDF',
-      error: error.message
+    if (tickets.length === 0) {
+      console.error(`[Settlement PDF] No tickets found for driver ${driver.name} in date range`);
+      return sendError(404, 'No approved tickets found for the selected date range');
+    }
+
+    console.log(`[Settlement PDF] Found ${tickets.length} tickets`);
+
+    // Calculate total pay
+    const totalPay = tickets.reduce((sum, ticket) => sum + parseFloat(ticket.total_pay || 0), 0);
+
+    console.log(`[Settlement PDF] Total pay calculated: $${totalPay.toFixed(2)}`);
+
+    // Generate PDF using pdf-lib
+    console.log('[Settlement PDF] Starting PDF generation...');
+    let pdfDoc;
+    let currentPage;
+    let font;
+    let boldFont;
+    let width, height;
+    
+    try {
+      pdfDoc = await PDFDocument.create();
+      currentPage = pdfDoc.addPage([612, 792]); // US Letter
+      const pageSize = currentPage.getSize();
+      width = pageSize.width;
+      height = pageSize.height;
+      font = await pdfDoc.embedFont(StandardFonts.Helvetica);
+      boldFont = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
+    } catch (pdfInitError) {
+      console.error('[Settlement PDF] Error initializing PDF document:', pdfInitError);
+      return sendError(500, `Failed to initialize PDF: ${pdfInitError.message}`);
+    }
+    
+    const primaryColor = rgb(0.16, 0.36, 0.32); // #295b52
+
+    // Header
+    currentPage.drawText('DRIVER SETTLEMENT', {
+      x: 50,
+      y: height - 50,
+      size: 24,
+      font: boldFont,
+      color: primaryColor,
     });
+
+    // Settlement metadata
+    const settlementNumber = `SET-${driverId}-${Date.now().toString().slice(-6)}`;
+    const settlementDate = new Date().toLocaleDateString();
+    currentPage.drawText(`Settlement #: ${settlementNumber}`, { x: 50, y: height - 80, size: 10, font });
+    currentPage.drawText(`Date of Issue: ${settlementDate}`, { x: 50, y: height - 95, size: 10, font });
+
+    // Driver info
+    currentPage.drawText('Driver:', {
+      x: width - 200,
+      y: height - 50,
+      size: 12,
+      font: boldFont,
+      color: primaryColor,
+    });
+    currentPage.drawText(`${driver.name} (${driver.user_id_code})`, { x: width - 200, y: height - 70, size: 10, font });
+    currentPage.drawText(`Period: ${startDate} to ${endDate}`, {
+      x: width - 200,
+      y: height - 85,
+      size: 9,
+      font: font,
+      color: rgb(0.5, 0.5, 0.5),
+    });
+
+    // Table Header
+    let yPos = height - 140;
+    const rowHeight = 20;
+    const colWidths = [80, 80, 120, 80, 60, 70, 80];
+    currentPage.drawRectangle({
+      x: 50,
+      y: yPos - 15,
+      width: width - 100,
+      height: rowHeight,
+      color: primaryColor,
+    });
+    const headers = ['Date', 'Ticket #', 'Description', 'Customer', 'Qty', 'Rate', 'Total Pay'];
+    let xPos = 55;
+    headers.forEach((header, index) => {
+      currentPage.drawText(header, {
+        x: xPos,
+        y: yPos - 5,
+        size: 10,
+        font: boldFont,
+        color: rgb(1, 1, 1),
+      });
+      xPos += colWidths[index];
+    });
+
+    yPos -= rowHeight;
+
+    // Table Rows
+    tickets.forEach((ticket) => {
+      // Check if we need a new page
+      if (yPos < 100) {
+        currentPage = pdfDoc.addPage([612, 792]);
+        yPos = currentPage.getSize().height - 50;
+      }
+
+      const rowData = [
+        String(ticket.date || '-'),
+        String(ticket.ticket_number || '-'),
+        String((ticket.job_type || ticket.description || '-').substring(0, 20)),
+        String((ticket.customer_name || '-').substring(0, 15)),
+        parseFloat(ticket.quantity || 0).toFixed(1),
+        `$${parseFloat(ticket.pay_rate || 0).toFixed(2)}`,
+        `$${parseFloat(ticket.total_pay || 0).toFixed(2)}`,
+      ];
+
+      xPos = 55;
+      rowData.forEach((cell, index) => {
+        try {
+          currentPage.drawText(String(cell), {
+            x: xPos,
+            y: yPos - 5,
+            size: 9,
+            font: font,
+          });
+        } catch (textError) {
+          console.warn(`[Settlement PDF] Error drawing text "${cell}":`, textError.message);
+        }
+        xPos += colWidths[index];
+      });
+
+      yPos -= rowHeight;
+    });
+
+    // Totals (on last page)
+    yPos -= 20;
+    currentPage.drawText('Subtotal:', { x: width - 250, y: yPos, size: 10, font });
+    currentPage.drawText(`$${totalPay.toFixed(2)}`, { x: width - 100, y: yPos, size: 10, font });
+
+    currentPage.drawText('Total Pay:', {
+      x: width - 250,
+      y: yPos - 40,
+      size: 14,
+      font: boldFont,
+      color: primaryColor,
+    });
+    currentPage.drawText(`$${totalPay.toFixed(2)}`, {
+      x: width - 100,
+      y: yPos - 40,
+      size: 14,
+      font: boldFont,
+      color: primaryColor,
+    });
+
+    // Finalize PDF
+    console.log('[Settlement PDF] Saving PDF document...');
+    const pdfBytesUint8 = await pdfDoc.save();
+
+    // Validate PDF bytes
+    if (!pdfBytesUint8 || pdfBytesUint8.length === 0) {
+      console.error('[Settlement PDF] PDF bytes are empty!');
+      return sendError(500, 'Failed to generate PDF: Empty PDF bytes');
+    }
+
+    // Convert Uint8Array to Buffer for Node.js
+    const pdfBytes = Buffer.from(pdfBytesUint8);
+
+    // Validate PDF header (should start with %PDF)
+    const pdfHeader = pdfBytes.slice(0, 4).toString('utf8');
+    console.log(`[Settlement PDF] PDF header check: "${pdfHeader}" (expected: "%PDF")`);
+    
+    if (pdfHeader !== '%PDF') {
+      console.error(`[Settlement PDF] Invalid PDF header: "${pdfHeader}" (hex: ${pdfBytes.slice(0, 4).toString('hex')})`);
+      console.error(`[Settlement PDF] First 20 bytes: ${pdfBytes.slice(0, 20).toString('hex')}`);
+      return sendError(500, 'Failed to generate PDF: Invalid PDF format');
+    }
+
+    console.log(`[Settlement PDF] PDF generated successfully: ${pdfBytes.length} bytes`);
+
+    // Prepare filename
+    const sanitizedDriverName = driver.name.replace(/[^a-zA-Z0-9]/g, '_');
+    const filename = `Settlement-${sanitizedDriverName}-${startDate}-${endDate}.pdf`;
+
+    // Prevent caching (CRITICAL for PDF downloads)
+    res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+    res.setHeader('Pragma', 'no-cache');
+    res.setHeader('Expires', '0');
+    res.removeHeader('ETag');
+
+    // Set PDF headers - MUST be set before sending
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.setHeader('Content-Length', pdfBytes.length);
+
+    // Send PDF binary data directly (Buffer is already correct format)
+    console.log(`[Settlement PDF] Sending PDF response: ${pdfBytes.length} bytes`);
+    res.status(200);
+    return res.send(pdfBytes);
+
+  } catch (error) {
+    console.error('[Settlement PDF] Error generating PDF:', error);
+    console.error('[Settlement PDF] Stack trace:', error.stack);
+    return sendError(500, `Failed to generate settlement PDF: ${error.message}`);
   }
 };
-
 /**
  * Get bill rates (default customer bill rates)
  */
